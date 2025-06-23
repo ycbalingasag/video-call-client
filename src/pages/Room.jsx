@@ -3,12 +3,16 @@ import { useParams } from 'react-router-dom';
 import io from 'socket.io-client';
 import Peer from 'simple-peer';
 
-// PALITAN ITO ng Render URL mo
-const socket = io('https://video-call-server-tmhu.onrender.com');
+const socket = io('https://video-call-server-tmhu.onrender.com'); // ← palitan mo ng backend URL mo (Render)
 
 export default function Room() {
   const { roomId } = useParams();
   const [remoteStream, setRemoteStream] = useState(null);
+  const [micOn, setMicOn] = useState(true);
+  const [camOn, setCamOn] = useState(true);
+  const [message, setMessage] = useState('');
+  const [chat, setChat] = useState([]);
+
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerRef = useRef(null);
@@ -54,6 +58,11 @@ export default function Room() {
       socket.on('receive-return-signal', ({ signal }) => {
         peerRef.current?.signal(signal);
       });
+
+      // 🟨 Listen for chat messages
+      socket.on('chat-message', ({ message, from }) => {
+        setChat(prev => [...prev, { message, from }]);
+      });
     });
 
     return () => {
@@ -61,12 +70,64 @@ export default function Room() {
     };
   }, [roomId]);
 
+  // 🟦 Send message
+  const sendMessage = () => {
+    if (!message.trim()) return;
+    socket.emit('chat-message', { message, from: 'You' });
+    setChat(prev => [...prev, { message, from: 'You' }]);
+    setMessage('');
+  };
+
+  // 🎤 Toggle mic
+  const toggleMic = () => {
+    const tracks = localVideoRef.current.srcObject.getAudioTracks();
+    tracks.forEach(track => track.enabled = !micOn);
+    setMicOn(!micOn);
+  };
+
+  // 📷 Toggle cam
+  const toggleCam = () => {
+    const tracks = localVideoRef.current.srcObject.getVideoTracks();
+    tracks.forEach(track => track.enabled = !camOn);
+    setCamOn(!camOn);
+  };
+
   return (
-    <div className="h-screen bg-gray-800 text-white p-4 flex flex-col items-center justify-center gap-6">
-      <h2 className="text-xl">Room: {roomId}</h2>
-      <div className="flex gap-4">
-        <video ref={localVideoRef} autoPlay playsInline muted className="rounded-xl shadow-md w-64" />
-        <video ref={remoteVideoRef} autoPlay playsInline className="rounded-xl shadow-md w-64" />
+    <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center justify-center">
+      <h2 className="text-2xl mb-4 font-bold">Room ID: {roomId}</h2>
+
+      <div className="flex flex-wrap justify-center gap-4">
+        <video ref={localVideoRef} autoPlay playsInline muted className="w-64 rounded-xl shadow" />
+        <video ref={remoteVideoRef} autoPlay playsInline className="w-64 rounded-xl shadow" />
+      </div>
+
+      <div className="flex gap-4 mt-4">
+        <button onClick={toggleMic} className="bg-blue-600 px-4 py-2 rounded">
+          {micOn ? 'Mute Mic' : 'Unmute Mic'}
+        </button>
+        <button onClick={toggleCam} className="bg-green-600 px-4 py-2 rounded">
+          {camOn ? 'Turn Off Cam' : 'Turn On Cam'}
+        </button>
+      </div>
+
+      {/* 💬 Chat Box */}
+      <div className="mt-6 w-full max-w-md">
+        <div className="bg-gray-700 rounded p-2 h-40 overflow-y-auto mb-2">
+          {chat.map((c, i) => (
+            <div key={i} className="text-sm">
+              <strong>{c.from}:</strong> {c.message}
+            </div>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={message}
+            onChange={e => setMessage(e.target.value)}
+            className="flex-1 px-2 py-1 text-black rounded"
+            placeholder="Type message..."
+          />
+          <button onClick={sendMessage} className="bg-purple-600 px-3 py-1 rounded">Send</button>
+        </div>
       </div>
     </div>
   );
