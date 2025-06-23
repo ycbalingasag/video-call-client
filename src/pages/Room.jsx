@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { io } from 'socket.io-client'; // ✅ fix import
+import { io } from 'socket.io-client';
 import Peer from 'simple-peer';
 
-const socket = io('https://video-call-server-tmhu.onrender.com'); // ✅ make sure this is correct
+const socket = io('https://video-call-server-tmhu.onrender.com'); // ✅ Palitan mo ng backend mo kung iba
 
 export default function Room() {
   const { roomId } = useParams();
@@ -15,7 +15,7 @@ export default function Room() {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerRef = useRef(null);
-  const streamRef = useRef(null); // ✅ to store original stream
+  const streamRef = useRef(null);
 
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
@@ -38,7 +38,7 @@ export default function Room() {
         peerRef.current = peer;
       });
 
-      socket.on('receive-signal', ({ signal, from }) => {
+      socket.on('receive-signal', ({ signal }) => {
         const peer = new Peer({ initiator: false, trickle: false, stream });
 
         peer.on('signal', (signal) => {
@@ -95,11 +95,19 @@ export default function Room() {
     <div className="min-h-screen bg-gray-900 text-white p-4 flex flex-col items-center justify-center">
       <h2 className="text-2xl mb-4 font-bold">Room ID: {roomId}</h2>
 
+      {/* 🎥 VIDEO AREA */}
       <div className="flex flex-wrap justify-center gap-4">
-        <video ref={localVideoRef} autoPlay playsInline muted className="w-64 rounded-xl shadow" />
-        <video ref={remoteVideoRef} autoPlay playsInline className="w-64 rounded-xl shadow" />
+        <div>
+          <p className="text-center text-sm mb-1">You</p>
+          <video ref={localVideoRef} autoPlay muted playsInline className="w-64 rounded-xl shadow" />
+        </div>
+        <div>
+          <p className="text-center text-sm mb-1">Other</p>
+          <video ref={remoteVideoRef} autoPlay playsInline className="w-64 rounded-xl shadow" />
+        </div>
       </div>
 
+      {/* 🎛 CONTROLS */}
       <div className="flex gap-4 mt-4">
         <button onClick={toggleMic} className="bg-blue-600 px-4 py-2 rounded">
           {micOn ? 'Mute Mic' : 'Unmute Mic'}
@@ -109,6 +117,7 @@ export default function Room() {
         </button>
       </div>
 
+      {/* 💬 CHAT */}
       <div className="mt-6 w-full max-w-md">
         <div className="bg-gray-700 rounded p-2 h-40 overflow-y-auto mb-2">
           {chat.map((c, i) => (
