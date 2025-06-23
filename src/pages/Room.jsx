@@ -1,13 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import io from 'socket.io-client';
+import { io } from 'socket.io-client'; // ✅ fix import
 import Peer from 'simple-peer';
 
-const socket = io('https://video-call-server-tmhu.onrender.com'); // ← palitan mo ng backend URL mo (Render)
+const socket = io('https://video-call-server-tmhu.onrender.com'); // ✅ make sure this is correct
 
 export default function Room() {
   const { roomId } = useParams();
-  const [remoteStream, setRemoteStream] = useState(null);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [message, setMessage] = useState('');
@@ -16,9 +15,11 @@ export default function Room() {
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const peerRef = useRef(null);
+  const streamRef = useRef(null); // ✅ to store original stream
 
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then((stream) => {
+      streamRef.current = stream;
       localVideoRef.current.srcObject = stream;
 
       socket.emit('join-room', roomId);
@@ -31,27 +32,24 @@ export default function Room() {
         });
 
         peer.on('stream', (remoteStream) => {
-          setRemoteStream(remoteStream);
           remoteVideoRef.current.srcObject = remoteStream;
         });
 
         peerRef.current = peer;
       });
 
-      socket.on('receive-signal', ({ signal }) => {
+      socket.on('receive-signal', ({ signal, from }) => {
         const peer = new Peer({ initiator: false, trickle: false, stream });
 
         peer.on('signal', (signal) => {
           socket.emit('return-signal', { signal });
         });
 
-        peer.signal(signal);
-
         peer.on('stream', (remoteStream) => {
-          setRemoteStream(remoteStream);
           remoteVideoRef.current.srcObject = remoteStream;
         });
 
+        peer.signal(signal);
         peerRef.current = peer;
       });
 
@@ -59,7 +57,6 @@ export default function Room() {
         peerRef.current?.signal(signal);
       });
 
-      // 🟨 Listen for chat messages
       socket.on('chat-message', ({ message, from }) => {
         setChat(prev => [...prev, { message, from }]);
       });
@@ -67,10 +64,10 @@ export default function Room() {
 
     return () => {
       socket.disconnect();
+      streamRef.current?.getTracks().forEach(track => track.stop());
     };
   }, [roomId]);
 
-  // 🟦 Send message
   const sendMessage = () => {
     if (!message.trim()) return;
     socket.emit('chat-message', { message, from: 'You' });
@@ -78,18 +75,20 @@ export default function Room() {
     setMessage('');
   };
 
-  // 🎤 Toggle mic
   const toggleMic = () => {
-    const tracks = localVideoRef.current.srcObject.getAudioTracks();
-    tracks.forEach(track => track.enabled = !micOn);
-    setMicOn(!micOn);
+    const tracks = streamRef.current?.getAudioTracks();
+    if (tracks && tracks.length > 0) {
+      tracks.forEach(track => (track.enabled = !micOn));
+      setMicOn(!micOn);
+    }
   };
 
-  // 📷 Toggle cam
   const toggleCam = () => {
-    const tracks = localVideoRef.current.srcObject.getVideoTracks();
-    tracks.forEach(track => track.enabled = !camOn);
-    setCamOn(!camOn);
+    const tracks = streamRef.current?.getVideoTracks();
+    if (tracks && tracks.length > 0) {
+      tracks.forEach(track => (track.enabled = !camOn));
+      setCamOn(!camOn);
+    }
   };
 
   return (
@@ -110,7 +109,6 @@ export default function Room() {
         </button>
       </div>
 
-      {/* 💬 Chat Box */}
       <div className="mt-6 w-full max-w-md">
         <div className="bg-gray-700 rounded p-2 h-40 overflow-y-auto mb-2">
           {chat.map((c, i) => (
